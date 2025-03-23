@@ -1,0 +1,183 @@
+Step 1: Set Up a Local Ubuntu VM
+1.1 Install VirtualBox
+1.	Download and install VirtualBox from the official website.
+2.	Launch VirtualBox after installation.
+
+1.2 Create a Local Ubuntu VM
+1.	Download Ubuntu Server ISO:
+o	Download the Ubuntu Server ISO from the official Ubuntu website.
+
+2.	Create a New VM in VirtualBox:
+o	Open VirtualBox and click New.
+o	Name the VM (e.g., Local-Ubuntu-VM).
+o	Set the type to Linux and version to Ubuntu (64-bit).
+o	Allocate resources:
+	RAM: 2 GB (or more, depending on your system).
+	CPU: 2 cores.
+	Storage: 20 GB (dynamically allocated).
+
+3.	Attach the Ubuntu ISO:
+o	Select the VM and click Settings → Storage.
+o	Under Controller: IDE, click the disk icon and choose the Ubuntu ISO file.
+4.	Install Ubuntu:
+o	Start the VM and follow the Ubuntu Server installation steps.
+o	Set up a user account and enable SSH for remote access.
+ 
+Step 2: Install and Configure Resource Monitoring
+2.1 Install Prometheus
+1.	SSH into the Local VM:
+o	Use a terminal or SSH client to connect to the VM.
+o	Example:
+bash
+Copy
+ssh username@<local-vm-ip>
+
+2.	Download and Install Prometheus:
+o	Run the following commands:
+bash
+Copy
+wget https://github.com/prometheus/prometheus/releases/download/v2.30.3/prometheus-2.30.3.linux-amd64.tar.gz
+tar -xvzf prometheus-2.30.3.linux-amd64.tar.gz
+cd prometheus-2.30.3.linux-amd64
+3.	Configure Prometheus:
+o	Edit the prometheus.yml file to scrape metrics from the local VM:
+yaml
+Copy
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'node'
+    static_configs:
+      - targets: ['localhost:9100']
+4.	Start Prometheus:
+o	Run Prometheus in the background:
+bash
+Copy
+./prometheus --config.file=prometheus.yml &
+2.2 Install Node Exporter
+1.	Download and Install Node Exporter:
+o	Run the following commands:
+bash
+Copy
+wget https://github.com/prometheus/node_exporter/releases/download/v1.3.1/node_exporter-1.3.1.linux-amd64.tar.gz
+tar -xvzf node_exporter-1.3.1.linux-amd64.tar.gz
+cd node_exporter-1.3.1.linux-amd64
+2.	Start Node Exporter:
+o	Run Node Exporter in the background:
+bash
+Copy
+./node_exporter &
+2.3 Install Grafana
+1.	Install Grafana:
+o	Run the following commands:
+bash
+Copy
+sudo apt-get install -y adduser libfontconfig1
+wget https://dl.grafana.com/oss/release/grafana_8.2.3_amd64.deb
+sudo dpkg -i grafana_8.2.3_amd64.deb
+sudo systemctl start grafana-server
+2.	Access Grafana:
+o	Open a browser and go to http://<local-vm-ip>:3000.
+o	Log in with the default credentials (admin/admin).
+3.	Add Prometheus as a Data Source:
+o	Go to Configuration → Data Sources → Add Data Source.
+o	Select Prometheus and enter the URL http://localhost:9090.
+4.	Create a Dashboard:
+o	Import a dashboard (e.g., Node Exporter Full) to visualize CPU, memory, and disk usage.
+ 
+Step 3: Set Up GCP and Configure Auto-Scaling
+3.1 Create a GCP Account and Project
+1.	Sign Up for GCP:
+o	Go to the GCP Console and create an account.
+2.	Create a New Project:
+o	Click Create Project and name it (e.g., AutoScale-Project).
+3.2 Create a VM Instance on GCP
+1.	Go to Compute Engine:
+o	Navigate to Compute Engine → VM Instances → Create.
+2.	Configure the VM:
+o	Name: Cloud-VM.
+o	Region: Choose a region close to you.
+o	Machine Type: e2-medium.
+o	Boot Disk: Ubuntu 20.04 LTS.
+o	Allow HTTP/HTTPS traffic.
+3.	Deploy the Sample Application:
+o	SSH into the GCP VM:
+bash
+Copy
+gcloud compute ssh cloud-vm
+o	Install Apache:
+bash
+Copy
+sudo apt update
+sudo apt install apache2
+3.3 Configure Auto-Scaling
+1.	Create an Instance Template:
+o	Go to Compute Engine → Instance Templates → Create.
+o	Use the same configuration as the Cloud-VM.
+2.	Create an Instance Group:
+o	Go to Compute Engine → Instance Groups → Create.
+o	Choose Managed Instance Group and select the template.
+o	Set the auto-scaling policy:
+	Metric: CPU utilization.
+	Target: 75%.
+	Minimum instances: 1.
+	Maximum instances: 5.
+3.	Set Up Cloud Monitoring:
+o	Go to Monitoring → Alerting → Create Policy.
+o	Add a condition for CPU usage > 75%.
+o	Set the notification channel (e.g., email).
+ 
+Step 4: Deploy the Sample Application
+4.1 Deploy on Local VM
+1.	Install Apache:
+o	Run the following commands:
+bash
+Copy
+sudo apt update
+sudo apt install apache2
+2.	Test the Application:
+o	Open a browser and go to http://<local-vm-ip>.
+4.2 Deploy on GCP VM
+1.	SSH into the GCP VM:
+o	Use the GCP Console or gcloud command:
+bash
+Copy
+gcloud compute ssh cloud-vm
+2.	Install Apache:
+o	Run the following commands:
+bash
+Copy
+sudo apt update
+sudo apt install apache2
+3.	Test the Application:
+o	Open a browser and go to http://<gcp-vm-external-ip>.
+ 
+Step 5: Test the Workflow
+1.	Simulate High Resource Usage:
+o	On the local VM, run a CPU-intensive task:
+bash
+Copy
+stress --cpu 2 --timeout 300
+2.	Monitor in Grafana:
+o	Check the Grafana dashboard for CPU usage exceeding 75%.
+3.	Verify Auto-Scaling:
+o	Go to the GCP Console and check if the instance group scales up.
+ 
+*********************************Architecture Diagram***********************************
+
+
++-------------------+       +-------------------+       +-------------------+
+|   Local VM        |       |   GCP Cloud       |       |   Sample App      |
+|-------------------|       |-------------------|       |-------------------|
+| - Prometheus      |       | - Auto-Scaling    |       | - Apache/Nginx    |
+| - Grafana         |       | - Cloud Monitoring|       | - Sample Web App  |
+| - Node Exporter   |       | - VM Instances    |       +-------------------+
++-------------------+       +-------------------+
+        |                           |
+        | Monitor Resource Usage     | Trigger Auto-Scaling
+        | (CPU > 75%)               | (Migrate to Cloud)
+        v                           v
++-------------------+       +-------------------+
+|   Alert Trigger   | ----> |   Cloud VM        |
++-------------------+       +-------------------+
